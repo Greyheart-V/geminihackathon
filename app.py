@@ -5,7 +5,7 @@ from collections import Counter
 from google import genai
 from dotenv import load_dotenv
 
-# 1. Load your API Key (Streamlit Cloud: use Secrets; local: use .env)
+# API key: st.secrets on Streamlit Cloud, .env locally
 load_dotenv()
 try:
     api_key = st.secrets.get("GOOGLE_API_KEY") or st.secrets.get("GEMINI_API_KEY")
@@ -16,16 +16,23 @@ if not api_key:
 if not api_key:
     raise ValueError("API key not found. Set GOOGLE_API_KEY or GEMINI_API_KEY in Secrets (Cloud) or .env (local).")
 
-# 2. Initialize the Gemini Client
 client = genai.Client(api_key=api_key)
 
-# Initialize conversation history and session cases
+# Session state: conversation, cases, last assessment (for follow-up form)
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "cases" not in st.session_state:
     st.session_state.cases = []
+if "last_response_text" not in st.session_state:
+    st.session_state.last_response_text = None
+if "last_severity" not in st.session_state:
+    st.session_state.last_severity = None
+if "last_color" not in st.session_state:
+    st.session_state.last_color = None
+if "last_risk_score" not in st.session_state:
+    st.session_state.last_risk_score = None
 
-# 3. The AI Cage (System Instructions)
+# Model system prompt (triage rules, output format, no dosages)
 SYSTEM_INSTRUCTION = """
 You are a livestock triage assistant for Kenyan smallholder farmers.
 
@@ -67,7 +74,6 @@ If analyzing an image, clearly state:
 "Image-based assessment may be inaccurate."
 """
 
-# 4. The User Interface (Streamlit)
 st.set_page_config(page_title="Livestock Early Warning System", page_icon="🐄")
 st.title("Kenya Livestock Early Warning & Risk Monitoring System")
 st.write("Preliminary diagnostic assistant for Friesian cows and poultry, focused on early risk detection.")
@@ -82,7 +88,6 @@ with st.expander("📞 Emergency Vet Guidance (Kenya)"):
         "or county livestock extension office immediately."
     )
 
-# 5. The Guardrails (Dropdowns to prevent user error)
 language = st.selectbox(
     "Language",
     ["English", "Swahili"],
@@ -113,13 +118,11 @@ uploaded_image = st.file_uploader(
     type=["jpg", "jpeg", "png"],
 )
 
-# 6. The Execution Logic
 if st.button("Analyze Symptoms"):
     with st.spinner("Analyzing symptoms..."):
 
         conversation_context = "\n".join(st.session_state.chat_history)
 
-        # Secretly compile the user's choices into a clean prompt
         compiled_prompt = f"""
 Previous conversation:
 {conversation_context}
@@ -153,7 +156,6 @@ Emergency Livestock Stabilization (Offline Heuristic):
 """
 
         try:
-            # Send to Gemini 2.5 Flash
             response = client.models.generate_content(
                 model='gemini-2.5-flash',
                 contents=contents,
@@ -184,16 +186,6 @@ Emergency Livestock Stabilization (Offline Heuristic):
 
             color = get_severity_color(response.text)
 
-            # Track cases for this session
-            st.session_state.cases.append(
-                {
-                    "livestock": livestock_type,
-                    "symptom": symptom,
-                    "severity": severity,
-                }
-            )
-
-            # Risk index based on severity
             RISK_MAP = {
                 "LOW": 25,
                 "MEDIUM": 60,
@@ -202,21 +194,30 @@ Emergency Livestock Stabilization (Offline Heuristic):
             }
             risk_score = RISK_MAP.get(severity, 50)
 
+            st.session_state.last_response_text = response.text
+            st.session_state.last_severity = severity
+            st.session_state.last_color = color
+            st.session_state.last_risk_score = risk_score
+
+            if "?" not in response.text:
+                st.session_state.cases.append(
+                    {
+                        "livestock": livestock_type,
+                        "symptom": symptom,
+                        "severity": severity,
+                    }
+                )
+
             st.success("Analysis Complete")
             st.metric("AI-Derived Risk Index (Heuristic)", f"{risk_score}/100")
             st.markdown("### Severity Indicator")
             st.markdown(f":{color}[⬤]")
             st.markdown(response.text)
 
-            # Simple flow indicator if more info is needed
-            if "?" in response.text:
-                st.info("Additional information required before full triage.")
-
-            if severity == "HIGH":
+            if severity == "HIGH" and "?" not in response.text:
                 contact = VET_CONTACTS.get(county, "Contact nearest county vet office.")
                 st.error(f"🚨 Emergency Contact: {contact}")
 
-            # Session-based herd dashboard
             total_cases = len(st.session_state.cases)
             high_cases = sum(1 for c in st.session_state.cases if c["severity"] == "HIGH")
 
@@ -241,3 +242,73 @@ Emergency Livestock Stabilization (Offline Heuristic):
         except Exception:
             st.error("⚠️ Network issue detected.")
             st.info(BASELINE_GUIDANCE)
+
+# Latest assessment block: redraw + follow-up form when model asked questions
+if st.session_state.last_response_text:
+    st.divider()
+    st.subheader("Latest assessment")
+    txt = st.session_state.last_response_text
+    risk = st.session_state.last_risk_score
+    color = st.session_state.last_color
+    severity = st.session_state.last_severity
+    st.metric("AI-Derived Risk Index (Heuristic)", f"{risk}/100")
+    st.markdown("### Severity Indicator")
+    st.markdown(f":{color}[⬤]")
+    st.markdown(txt)
+    if severity == "HIGH" and "?" not in txt:
+        contact = VET_CONTACTS.get(county, "Contact nearest county vet office.")
+        st.error(f"🚨 Emergency Contact: {contact}")
+
+    if "?" in txt:
+        st.caption("Answer the questions above so we can complete the triage.")
+        with st.form("follow_up_form"):
+            follow_up_answer = st.text_area(
+                "Your answers",
+                placeholder="E.g.: 1. Yes, the calf is suckling. 2. No diarrhea or discharge.",
+                help="Reply to each question in order. Short answers are fine.",
+            )
+            submitted = st.form_submit_button("Submit follow-up answers")
+        if submitted and follow_up_answer.strip():
+            with st.spinner("Completing triage..."):
+                follow_up_message = "Farmer's additional information:\n" + follow_up_answer.strip()
+                st.session_state.chat_history.append(follow_up_message)
+                conv = "\n\n---\n\n".join(st.session_state.chat_history)
+                LANGUAGE_RULE = (
+                    "Respond in Swahili." if language == "Swahili" else "Respond in English."
+                )
+                try:
+                    response2 = client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=conv,
+                        config=genai.types.GenerateContentConfig(
+                            system_instruction=SYSTEM_INSTRUCTION + "\n" + LANGUAGE_RULE,
+                        ),
+                    )
+                    st.session_state.chat_history.append(response2.text)
+                    st.session_state.last_response_text = response2.text
+                    sev = re.search(r"##\s*Severity\s*\n(LOW|MEDIUM|HIGH)", response2.text, re.IGNORECASE)
+                    st.session_state.last_severity = sev.group(1).upper() if sev else "UNKNOWN"
+                    st.session_state.last_color = "red" if "HIGH" in response2.text.upper() else "orange" if "MEDIUM" in response2.text.upper() else "green"
+                    st.session_state.last_risk_score = {"LOW": 25, "MEDIUM": 60, "HIGH": 90}.get(st.session_state.last_severity, 50)
+                    if "?" not in response2.text:
+                        st.session_state.cases.append({
+                            "livestock": livestock_type,
+                            "symptom": symptom,
+                            "severity": st.session_state.last_severity,
+                        })
+                    st.rerun()
+                except Exception:
+                    st.error("⚠️ Network issue. Please try again.")
+        elif submitted and not follow_up_answer.strip():
+            st.warning("Please type your answers before submitting.")
+
+st.divider()
+# Reset conversation and case list for a new animal
+if st.button("🔄 Clear session & start new case"):
+    st.session_state.chat_history = []
+    st.session_state.cases = []
+    st.session_state.last_response_text = None
+    st.session_state.last_severity = None
+    st.session_state.last_color = None
+    st.session_state.last_risk_score = None
+    st.rerun()
