@@ -37,9 +37,9 @@ SYSTEM_INSTRUCTION = """
 You are a livestock triage assistant for Kenyan smallholder farmers.
 
 SCOPE:
-- Friesian dairy cows
-- Poultry (layers and broilers)
-- Kenyan smallholder conditions
+- Livestock: cattle (dairy and beef), goats, sheep
+- Poultry: layers, broilers, indigenous/local chickens
+- Kenyan smallholder conditions (low-cost, local inputs, limited vet access)
 
 GOAL:
 Provide SAFE preliminary triage and stabilization guidance only.
@@ -76,7 +76,7 @@ If analyzing an image, clearly state:
 
 st.set_page_config(page_title="Livestock Early Warning System", page_icon="🐄")
 st.title("Kenya Livestock Early Warning & Risk Monitoring System")
-st.write("Preliminary diagnostic assistant for Friesian cows and poultry, focused on early risk detection.")
+st.write("Preliminary triage for livestock (cattle, goats, sheep) and poultry. Early risk detection only—not a substitute for a vet.")
 st.warning(
     "⚠️ This tool provides preliminary livestock triage only. "
     "It does NOT replace a licensed veterinarian."
@@ -101,11 +101,42 @@ VET_CONTACTS = {
 
 col1, col2 = st.columns(2)
 with col1:
-    livestock_type = st.selectbox("Livestock Type", ["Friesian Cow", "Poultry (Layers)", "Poultry (Broilers)"])
+    livestock_type = st.selectbox(
+        "Livestock Type",
+        [
+            "Cattle (Dairy)",
+            "Cattle (Beef)",
+            "Goat",
+            "Sheep",
+            "Poultry (Layers)",
+            "Poultry (Broilers)",
+            "Poultry (Indigenous/Local)",
+        ],
+    )
 with col2:
-    age_stage = st.selectbox("Age/Stage", ["Calf / Hatchling", "Heifer / Grower", "Milking / Laying", "Incubation"])
+    age_stage = st.selectbox(
+        "Age/Stage",
+        [
+            "Young (calf/kid/lamb/chick)",
+            "Grower",
+            "Adult / Milking / Laying",
+            "Incubation (poultry)",
+            "Other",
+        ],
+    )
 
-symptom = st.selectbox("Primary Symptom", ["Lethargy / Weakness", "Drop in Production", "Abnormal Droppings", "Off-Feed", "Respiratory Issues"])
+symptom = st.selectbox(
+    "Primary Symptom",
+    [
+        "Lethargy / Weakness",
+        "Drop in Production",
+        "Abnormal Droppings",
+        "Off-Feed",
+        "Respiratory Issues",
+        "Bloat / Swelling",
+        "Wound / Visible injury",
+    ],
+)
 extra_details = st.text_area("Additional Details (Optional)", placeholder="E.g., Started 2 days ago...")
 
 county = st.selectbox(
@@ -264,7 +295,7 @@ if st.session_state.last_response_text:
         with st.form("follow_up_form"):
             follow_up_answer = st.text_area(
                 "Your answers",
-                placeholder="E.g.: 1. Yes, the calf is suckling. 2. No diarrhea or discharge.",
+                placeholder="E.g.: 1. Yes, still drinking. 2. No discharge seen.",
                 help="Reply to each question in order. Short answers are fine.",
             )
             submitted = st.form_submit_button("Submit follow-up answers")
