@@ -10,7 +10,7 @@ Many smallholder farmers in Kenya have limited or delayed access to veterinary c
 
 ## What the app does
 
-- **Triage by symptom:** The farmer selects livestock type (Friesian cow, layers, broilers), age/stage, primary symptom, and optional details. Optional photo upload is supported; image-based assessment is explicitly framed as potentially inaccurate.
+- **Triage by symptom:** The farmer selects livestock type (cattle—dairy or beef—goat, sheep, or poultry: layers, broilers, indigenous/local), age/stage, primary symptom, and optional details. Optional photo upload is supported; image-based assessment is explicitly framed as potentially inaccurate.
 - **Structured output:** The assistant returns a likely issue, severity (LOW / MEDIUM / HIGH), immediate care steps, and when to call a vet. It does not give drug dosages and favors low-cost, locally relevant advice.
 - **Follow-up questions:** If information is insufficient, the assistant asks a small number of targeted questions before giving full triage, so the flow stays controlled.
 - **Language:** Responses can be in English or Swahili.
@@ -44,4 +44,4 @@ Set `GEMINI_API_KEY` or `GOOGLE_API_KEY` in a `.env` file in the `code` folder (
 
 ## MVP disclaimer
 
-This is a minimum viable product. Scope is limited to Friesian dairy cows and poultry (layers and broilers) in a Kenyan smallholder context. The risk index, session dashboard, and outbreak-style alert are heuristic and for illustration only. Always treat professional veterinary advice as authoritative.
+This is a minimum viable product. Scope covers livestock (cattle, goats, sheep) and poultry (layers, broilers, indigenous/local) in a Kenyan smallholder context. The risk index, session dashboard, and outbreak-style alert are heuristic and for illustration only. Always treat professional veterinary advice as authoritative.
