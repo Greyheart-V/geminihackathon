@@ -5,11 +5,19 @@ from collections import Counter
 from google import genai
 from dotenv import load_dotenv
 
-# 1. Load your API Key
+# 1. Load your API Key (Streamlit Cloud: use Secrets; local: use .env)
 load_dotenv()
+try:
+    api_key = st.secrets.get("GOOGLE_API_KEY") or st.secrets.get("GEMINI_API_KEY")
+except Exception:
+    api_key = None
+if not api_key:
+    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+if not api_key:
+    raise ValueError("API key not found. Set GOOGLE_API_KEY or GEMINI_API_KEY in Secrets (Cloud) or .env (local).")
 
-# 2. Initialize the Gemini Client (matching your Cursor setup)
-client = genai.Client()
+# 2. Initialize the Gemini Client
+client = genai.Client(api_key=api_key)
 
 # Initialize conversation history and session cases
 if "chat_history" not in st.session_state:
